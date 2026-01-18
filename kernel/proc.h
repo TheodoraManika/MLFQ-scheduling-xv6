@@ -81,6 +81,18 @@ struct trapframe {
 
 enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
+// Process information structure for getpinfo syscall
+#define NPROC_STAT 64
+
+struct pstat {
+  int pid;                    // Process ID
+  int ppid;                   // Parent process ID
+  enum procstate state;       // Process state
+  char name[16];              // Process name
+  int priority;               // Current priority level (0-3)
+  uint64 sz;                  // Size of process memory (bytes)
+};
+
 // Per-process state
 struct proc {
   struct spinlock lock;
@@ -104,4 +116,9 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+  
+  // MLFQ scheduling fields
+  int priority;                // Current priority level (0-3)
+  int ticks_used;              // Ticks used at current priority level
+  int wait_count;              // Counter for starvation prevention
 };

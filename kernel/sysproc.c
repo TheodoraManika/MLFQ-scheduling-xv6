@@ -107,3 +107,38 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+// Get process info for all active processes
+uint64
+sys_getpinfo(void)
+{
+  uint64 addr;
+  struct pstat ps[NPROC_STAT];
+  struct proc *p;
+  int i = 0;
+  
+  argaddr(0, &addr);
+  
+  memset(ps, 0, sizeof(ps));
+  
+  // Iterate through process table
+  for(p = proc; p < &proc[NPROC] && i < NPROC_STAT; p++) {
+    acquire(&p->lock);
+    if(p->state != UNUSED) {
+      ps[i].pid = p->pid;
+      ps[i].ppid = (p->parent != 0) ? p->parent->pid : 0;
+      ps[i].state = p->state;
+      ps[i].priority = p->priority;
+      ps[i].sz = p->sz;
+      safestrcpy(ps[i].name, p->name, sizeof(ps[i].name));
+      i++;
+    }
+    release(&p->lock);
+  }
+  
+  // Copy to user space
+  if(copyout(myproc()->pagetable, addr, (char *)ps, NPROC_STAT * sizeof(struct pstat)) < 0) {
+    return -1;
+  }
+  
+  return 0;
+}

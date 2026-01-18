@@ -6,6 +6,8 @@
 #include "proc.h"
 #include "defs.h"
 
+extern struct proc proc[];
+
 struct spinlock tickslock;
 uint ticks;
 
@@ -169,6 +171,50 @@ clockintr()
     ticks++;
     wakeup(&ticks);
     release(&tickslock);
+    
+    // MLFQ: Handle tick counting and priority changes
+    struct proc *p;
+    for(p = proc; p < &proc[NPROC]; p++) {
+      acquire(&p->lock);
+      
+      if(p->state == RUNNING) {
+        // Increment ticks used at current priority
+        p->ticks_used++;
+        
+        // Get time quantum for current priority
+        int time_quantum[] = {4, 8, 16, 32};
+        
+        // If process used entire time quantum, demote to next priority
+        if(p->ticks_used >= time_quantum[p->priority]) {
+          if(p->priority < 3) {
+            // Demote to next lower priority
+            p->priority++;
+            p->ticks_used = 0;
+          }
+        }
+      }
+      
+      // MLFQ: Starvation prevention - boost priority after waiting
+      // Waiting time is tracked when process is RUNNABLE (ready to run but not running)
+      if(p->state == RUNNABLE) {
+        p->wait_count++;
+        int time_quantum[] = {4, 8, 16, 32};
+        
+        // If process waited for 10 * current_time_quantum, boost priority (move up)
+        if(p->wait_count >= 10 * time_quantum[p->priority]) {
+          if(p->priority > 0) {
+            p->priority--;
+            p->ticks_used = 0;
+            p->wait_count = 0;
+          }
+        }
+      } else {
+        // Reset wait_count when process is not runnable
+        p->wait_count = 0;
+      }
+      
+      release(&p->lock);
+    }
   }
 
   // ask for the next timer interrupt. this also clears
